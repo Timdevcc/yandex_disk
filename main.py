@@ -2,7 +2,7 @@ import logging
 import os
 import requests
 from telegram import __version__ as TG_VER, Bot
-from config import TOKEN
+from config import TG_TOKEN, Y_CLIENTID
 from data import db_session
 from data.users import User
 from telegram import ForceReply, Update, ReplyKeyboardMarkup
@@ -24,7 +24,7 @@ def get_user(id):
     return user
 
 
-get_code_url = 'https://oauth.yandex.ru/authorize?response_type=token&client_id=5bcd7b1604d1499285d37a386146fa42'
+get_code_url = 'https://oauth.yandex.ru/authorize?response_type=token&client_id=' + Y_CLIENTID
 
 
 async def start(update, context):
@@ -52,18 +52,18 @@ async def get_token(update, context):
     await update.message.reply_text("Ваш token был обновлен. Вы можете в любое время именить его", reply_markup=markup)
 
 
-async def stop(update, contetx):
+async def stop(update, context):
     await update.message.reply_text("stop")
 
 
 async def update_token(update, context):
-    await update.message.reply_text(f"Отпрате новый токен {get_code_url}")
+    await update.message.reply_text(f"Отправьте новый токен {get_code_url}")
     return 1
 
 
 def main():
     db_session.global_init("db/users.db")
-    application = Application.builder().token(TOKEN).build()
+    application = Application.builder().token(TG_TOKEN).build()
     global db_sess
     db_sess = db_session.create_session()
     start_handler = ConversationHandler(
