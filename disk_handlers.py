@@ -514,3 +514,19 @@ def restore(oauth: str, path: str, name='', overwrite='false'):
             status = requests.get(href).json()
 
     return {'status': 'success'}
+
+
+def get_filenames_list(oauth: str, limit=20, media_type='', offset='') -> list:
+    """Возвращает плоский список всех файлов на Диске
+
+    :param oauth: OAuth пользователя
+    :param limit: Количество файлов, описание которых следует вернуть в ответе
+    :param media_type: Тип файлов, которые нужно включить в список.
+        Чтобы запросить несколько типов файлов, можно перечислить их в
+        значении параметра через запятую.
+    :param offset: Количество ресурсов с начала списка, которые следует опустить в ответе.
+    :returns: Список всех файлов с указанным полным путём"""
+
+    return [item["path"] for item in
+            get_all_files(oauth, limit, media_type, offset)["items"]]
+
