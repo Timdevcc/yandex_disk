@@ -201,8 +201,8 @@ def upload_file(oauth: str, path: str, file_name: str, overwrite="false",
     response = requests.get(url, headers=headers)
 
     if response:
-        response2 = requests.put(url=response.json()["href"],
-                                 data=open("downloaded/" + file_name, 'rb'))
+        with open("downloaded/" + file_name, 'rb') as b_file:
+            response2 = requests.put(url=response.json()["href"], data=b_file)
         if remove:
             os.remove("downloaded/" + file_name)
         return {"status": "success"} if response2 else response2
