@@ -174,8 +174,10 @@ def add_metainfo(oauth: str, path, custom_properties: dict, fields='') -> dict:
     return response.json()
 
 
-def upload_file(oauth: str, path: str, file_name: str, overwrite="false"):
+def upload_file(oauth: str, path: str, file_name: str, overwrite="false",
+                remove=True):
     """Загружает файл на Диск
+    Файл должен быть в папке downloaded в папке проекта, после загрузки на Диск файл удаляется
 
     https://yandex.ru/dev/disk/api/reference/upload.html
 
@@ -186,6 +188,7 @@ def upload_file(oauth: str, path: str, file_name: str, overwrite="false"):
         загружается в папку, в которой уже есть файл с таким именем. Допустимые значения:
         false — не перезаписывать файл, отменить загрузку (используется по умолчанию);
         true — удалить файл с совпадающим именем и записать загруженный файл.
+    :param remove: Признак удаления файла после загрузки на Диск
     """
 
     url = "https://cloud-api.yandex.net/v1/disk/resources/upload"
@@ -200,6 +203,8 @@ def upload_file(oauth: str, path: str, file_name: str, overwrite="false"):
     if response:
         response2 = requests.put(url=response.json()["href"],
                                  data=open("downloaded/" + file_name, 'rb'))
+        if remove:
+            os.remove("downloaded/" + file_name)
         return {"status": "success"} if response2 else response2
 
     return response.json()
@@ -252,6 +257,8 @@ def upload_file_from_url(oauth: str, file_url: str, path: str, file_name='', dis
 def load_file_from_disk(oauth: str, path: str, fields=''):
     """Скачивает файл с Диска в папку downloaded
 
+    Возвращает {'status': 'success', "filename": <имя файла>}
+
     https://yandex.ru/dev/disk/api/reference/content.html
 
     :param oauth: OAuth пользователя
@@ -294,7 +301,7 @@ def load_file_from_disk(oauth: str, path: str, fields=''):
         with open('downloaded/' + filename,
                   'wb') as downloaded_file:
             downloaded_file.write(response2.content)
-    return {'status': 'success'}
+    return {'status': 'success', "filename": filename}
 
 
 def copy(oauth: str, source_path: str, to_path: str, overwrite='false', fields=''):
