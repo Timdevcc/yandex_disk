@@ -1,12 +1,11 @@
 import logging
 import os
-import requests
-from telegram import __version__ as TG_VER, Bot
+import disk_handlers
 from config import TG_TOKEN, Y_CLIENTID
 from data import db_session
-from data.users import User
-from telegram import ForceReply, Update, ReplyKeyboardMarkup
+from telegram import ForceReply, Update, ReplyKeyboardMarkup, File
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
+import Bot_Handler
 
 # Enable logging
 logging.basicConfig(
@@ -15,77 +14,61 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-reply_keyboard = [["/update_token"], ["/получить файлы"]]
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
-
-
-def get_user(id):
-    user = db_sess.get(User, id)
-    return user
-
-
-get_code_url = 'https://oauth.yandex.ru/authorize?response_type=token&client_id=' + Y_CLIENTID
-
-
-async def start(update, context):
-    id = update.message.chat.id
-    user = get_user(id)
-    if not user:
-        await update.message.reply_text(f'''Приветствуй,\nЯ пока не имею  доступ к вашему Яндекс диску.
-                                           \nПерейдите по ссылке, скопируйте токен и отправте мне, что я смог взаимоде́йствовать с вашим диском\n{get_code_url}''')
-        return 1
-    else:
-        await update.message.reply_text("Бот готов к использованию", reply_markup=markup)
-
-
-async def get_token(update, context):
-    id = update.message.chat.id
-    token = update.message.text
-    user = get_user(id)
-    if user:
-        db_sess.delete(user)
-
-    user = User(id = id, token = token)
-    db_sess.add(user)
-    db_sess.commit()
-
-    await update.message.reply_text("Ваш token был обновлен. Вы можете в любое время именить его", reply_markup=markup)
-
-
-async def stop(update, context):
-    await update.message.reply_text("stop")
-
-
-async def update_token(update, context):
-    await update.message.reply_text(f"Отправьте новый токен {get_code_url}")
-    return 1
-
-
 def main():
-    db_session.global_init("db/users.db")
+    bot = Bot_Handler.Bot_handler()
     application = Application.builder().token(TG_TOKEN).build()
     global db_sess
     db_sess = db_session.create_session()
     start_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[CommandHandler('start', bot.start)],
 
         states={
-            1: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_token)]
+            1: [MessageHandler(filters.TEXT & ~filters.COMMAND, bot.get_token)]
             
         },
-        fallbacks=[CommandHandler('stop', stop)]
+        fallbacks=[CommandHandler('stop', bot.stop)]
+    )
+
+    upload_handler = ConversationHandler(
+        entry_points=[CommandHandler("upload_file", bot.upload_file)],
+        states={
+            1: [MessageHandler(filters.ALL, bot.get_path)],
+            2: [MessageHandler(filters.ALL, bot.uploaded_file)]
+        },
+        fallbacks=[CommandHandler("stop", bot.stop)]
     )
 
     update_handler = ConversationHandler(
-        entry_points=[CommandHandler('update_token', update_token)],
-
+        entry_points=[CommandHandler('update_token', bot.update_token)],
         states={
-            1: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_token)]
+            1: [MessageHandler(filters.TEXT & ~filters.COMMAND, bot.get_token)]
             
         },
-        fallbacks=[CommandHandler('stop', stop)]
+        fallbacks=[CommandHandler('stop', bot.stop)]
     )
 
+    folder_handler = ConversationHandler(
+        entry_points=[CommandHandler('create_folder', bot.create_folder)],
+        states={
+            1: [MessageHandler(filters.ALL, bot.get_path)],
+            2: [MessageHandler(filters.ALL, bot.created_folder)]
+        },
+        fallbacks=[CommandHandler('stop', bot.stop)]
+    )
+
+    download_file = ConversationHandler(
+        entry_points=[CommandHandler("download_file", bot.download_file)],
+        states={
+            1: [MessageHandler(filters.ALL, bot.get_path)]
+        },
+        fallbacks=[CommandHandler('stop', bot.stop)]
+    )
+    application.add_handler(CommandHandler("get_all_files", bot.get_all_files))
+    application.add_handler(CommandHandler("get_disk_info", bot.get_disk_info))
+    application.add_handler(CommandHandler('clear_trash_bin', bot.clear_trash_bin))
+    application.add_handler(folder_handler)
+    application.add_handler(upload_handler)
+    application.add_handler(download_file)
     application.add_handler(start_handler)
     application.add_handler(update_handler)
 

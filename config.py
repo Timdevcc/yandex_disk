@@ -1,0 +1,2 @@
+TG_TOKEN = '5927654801:AAEvfkvplq3CjhudmhNnoAdsqACSV7JM-ic'
+Y_CLIENTID = 'd7ffcb3d858e458b8cef0d7117e48c94'
