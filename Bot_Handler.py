@@ -10,8 +10,8 @@ from config import TG_TOKEN, Y_CLIENTID
 
 db_session.global_init("db/users.db")
 db_sess = db_session.create_session()
-reply_keyboard = [["/update_token"], ["/get_all_files", '/get_disk_info'], ["/upload_file", "/download_file", "/create_folder"],
-                  ["/clear_trash_bin"]]
+reply_keyboard = [["/update_token"], ["/get_all_files", '/get_disk_info', "/delete_file"], ["/upload_file", "/download_file", "/create_folder"],
+                  ["/clear_trash", "/move", "/copy"]]
 ready_keyboard = [["/ready"]]
 markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
 ready_markup = ReplyKeyboardMarkup(ready_keyboard, one_time_keyboard=False)
@@ -31,6 +31,28 @@ def byt(size):  # перевод байтов в удобную сисетму
 def get_user(id):
     user = db_sess.get(User, id)
     return user
+
+
+async def send_main_files(update, context, typ):
+    user = get_user(update.message.chat.id)
+    path = "disk:/"
+    context.user_data["dirs"] = []
+    print(typ)
+    if typ == "copy1":
+        context.user_data["path2"] = path
+    else:
+        context.user_data["path"] = path
+    resp = disk_handlers.get_file_or_dir_metainfo(user.token, path)
+    for i in resp['_embedded']["items"]:
+        if i["type"] == "dir":
+            context.user_data["dirs"].append(i["name"])
+            if typ == "dir":
+                await update.message.reply_text(i["name"], reply_markup=ready_markup)
+            else:
+                await update.message.reply_text(i["name"])
+        elif typ != "dir" and typ != "copy1":
+            await update.message.reply_text(i["name"])
+    return 1
 
 
 class Bot_handler:
@@ -67,8 +89,8 @@ class Bot_handler:
 
     async def get_path(self, update, context):
         user = get_user(update.message.chat.id)
-        path = context.user_data["path"]
         typ = context.user_data["typ"]
+        path = context.user_data["path"] if typ != "copy1" else context.user_data["path2"]
         text = update.message.text
 
         if path == "disk:/":
@@ -77,11 +99,26 @@ class Bot_handler:
         if text == "/ready":
             if typ == "dir":
                 await update.message.reply_text("Напишите имя")
+            if typ == "delete":
+                await self.deleted_file(update, path)
+                return ConversationHandler.END
+            if typ == "copy0":
+                await update.message.reply_text("Укажите путь, по которому будет скопирован файл или папка")
+                context.user_data["path"] = path
+                context.user_data["typ"] = "copy1"
+                await send_main_files(update, context, "copy1")
+                return 1
+            if typ == "copy1":
+                await self.copied(update, context)
+                return ConversationHandler.END
             return 2
 
         if text in context.user_data["dirs"]:
             path = path + "/" + text
-            context.user_data["path"] = path
+            if typ == "copy1":
+                context.user_data["path2"] = path
+            else:
+                context.user_data["path"] = path
             resp = disk_handlers.get_file_or_dir_metainfo(user.token, path)
             context.user_data["dirs"] = []
             for i in resp['_embedded']["items"]:
@@ -99,11 +136,58 @@ class Bot_handler:
             if typ == "get_file":
                 await self.downloaded_file(update, path, user.token)
                 return ConversationHandler.END
+            elif typ == "delete":
+                await update.message.reply_text("/", reply_markup=markup)
+                await self.deleted_file(update, path)
+                return ConversationHandler.END
+            if typ == "copy0":
+                await update.message.reply_text("Укажите путь, по которому будет скопирован файл или папка")
+                context.user_data["path"] = path
+                context.user_data["typ"] = "copy1"
+                await send_main_files(update, context, "copy1")
+                return 1
             return 2
+
+    async def copied(self, update, context):
+        user = get_user(update.message.chat.id)
+        path1 = context.user_data["path"]
+        text = path1.split("/")[-1]
+        path2 = context.user_data["path2"]
+        if path2 == "disk:/":
+            path2 = "disk:"
+        resp = disk_handlers.copy(user.token, path2, path1)
+        if resp.get("status", 0) == "success":
+            await update.message.reply_text("Файл успешно скопирован")
+        else:
+            print(path1, path2)
+            print(resp)
+            await update.message.reply_text("Что-то пошло не так")
+
+    async def copy(self, update, context):
+        context.user_data["typ"] = "copy0"
+        await update.message.reply_text("Укажите путь до файла или папки, который будет скопирован. Если выбрали папку, отпратье /ready",
+                                        reply_markup=ready_markup)
+        await send_main_files(update, context, "copy")
+        return 1
+
+    async def deleted_file(self, update, path):
+        user = get_user(update.message.chat.id)
+        resp = disk_handlers.delete(user.token, path)
+        if resp.get("status", 0) == "success":
+            await update.message.reply_text("Успешно удалено", reply_markup=markup)
+        else:
+            await update.message.reply_text("Что-то пошло не так", reply_markup=markup)
+
+    async def delete_file(self, update, context):
+        context.user_data["typ"] = "delete"
+        await update.message.reply_text("Укажите путь для удаления файла или папки. Если выбрали папку, то отправтье /ready",
+                                        reply_markup=ready_markup)
+        await send_main_files(update, context, "all")
+        return 1
 
     async def downloaded_file(self, update, path, token):
         resp = disk_handlers.load_file_from_disk(token, path)
-        if resp["status"] == "success":
+        if resp.get("status", 1) == "success":
             await update.message.reply_document(document=open(f'downloaded/{resp["filename"]}', 'rb'))
             os.remove(f"downloaded/{resp['filename']}")
         else:
@@ -122,15 +206,8 @@ class Bot_handler:
         user = get_user(update.message.chat.id)
 
         await update.message.reply_text("Выберите папку")
-        path = "disk:/"
-        context.user_data["path"] = path
         context.user_data["typ"] = "dir"
-        resp = disk_handlers.get_file_or_dir_metainfo(user.token, path)
-        context.user_data["dirs"] = []
-        for i in resp['_embedded']["items"]:
-            if i["type"] == "dir":
-                context.user_data["dirs"].append(i["name"])
-                await update.message.reply_text(i["name"], reply_markup=ready_markup)
+        await send_main_files(update, context, "dir")
         return 1
 
     async def clear_trash_bin(self, update, contetx):
@@ -142,30 +219,28 @@ class Bot_handler:
     async def created_folder(self, update, context):
         user = get_user(update.message.chat.id)
         path = context.user_data["path"]
+        if path == "disk:/":
+            path = "disk:"
         path = path + "/" + update.message.text
         resp = disk_handlers.create_folder(user.token, path)
         if resp.get("href", 0) != 0:
-            await update.message.reply_text("Папка была создана")
+            await update.message.reply_text("Папка была создана", reply_markup=markup)
         else:
-            await update.message.reply_text("Что-то пошло не так")
+            await update.message.reply_text("Что-то пошло не так", reply_markup=markup)
+        return ConversationHandler.END
 
     async def create_folder(self, update, context):
         user = get_user(update.message.chat.id)
-        path = "disk:/"
-        context.user_data["path"] = path
         context.user_data["typ"] = "dir"
         await update.message.reply_text("Выберите папку, в которой вы хотите создать папку")
-        context.user_data["dirs"] = []
-        resp = disk_handlers.get_file_or_dir_metainfo(user.token, path)
-        for i in resp['_embedded']["items"]:
-            if i["type"] == "dir":
-                context.user_data["dirs"].append(i["name"])
-                await update.message.reply_text(i["name"], reply_markup=ready_markup)
+        await send_main_files(update, context, "dir")
         return 1
 
     async def uploaded_file(self, update, context):
         user = get_user(update.message.chat.id)
         path = context.user_data["path"]
+        if path == "disk:/":
+            path = "disk:"
         message = update.message
         attachment = message.effective_attachment
 
@@ -186,15 +261,8 @@ class Bot_handler:
         user = get_user(update.message.chat.id)
 
         await update.message.reply_text("Выберите файл.\nЕсли вы хотите перейти к какой-то папке, то отправтье ее название")
-        path = "disk:/"
-        context.user_data["path"] = path
         context.user_data["typ"] = "get_file"
-        resp = disk_handlers.get_file_or_dir_metainfo(user.token, path)
-        context.user_data["dirs"] = []
-        for i in resp['_embedded']["items"]:
-            if i["type"] == "dir":
-                context.user_data["dirs"].append(i["name"])
-            await update.message.reply_text(i["name"])
+        await send_main_files(update, context, "get_file")
         return 1
 
     async def get_disk_info(self, update, context):
