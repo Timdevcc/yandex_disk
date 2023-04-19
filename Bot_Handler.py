@@ -10,12 +10,14 @@ from config import TG_TOKEN, Y_CLIENTID
 
 db_session.global_init("db/users.db")
 db_sess = db_session.create_session()
-reply_keyboard = [["/update_token"], ["/get_all_files", '/get_disk_info', "/delete_file"], ["/upload_file", "/download_file", "/create_folder"],
+reply_keyboard = [["/update_token", "/help"], ["/get_all_files", '/get_disk_info', "/delete_file"], ["/upload_file", "/download_file", "/create_folder"],
                   ["/clear_trash", "/move", "/copy"]]
 ready_keyboard = [["/ready"]]
 markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
 ready_markup = ReplyKeyboardMarkup(ready_keyboard, one_time_keyboard=False)
 get_code_url = 'https://oauth.yandex.ru/authorize?response_type=token&client_id=' + Y_CLIENTID
+with open("help", encoding="utf-8") as fl:
+    help_text = fl.read()
 
 
 def byt(size):  # перевод байтов в удобную сисетму
@@ -61,11 +63,14 @@ class Bot_handler:
         user = get_user(id)
         if not user:
             await update.message.reply_text(f'''Приветствуй,\nЯ пока не имею  доступ к вашему Яндекс диску.
-                                               \nПерейдите по ссылке, скопируйте токен и отправте мне, что я смог взаимоде́йствовать с вашим диском\n{get_code_url}''')
+                                               \nПерейдите по ссылке, скопируйте токен и отправьте мне, чтобы я смог взаимоде́йствовать с вашим диском\n{get_code_url}''')
             return 1
         else:  # если пользователь уже есть в бд
             await update.message.reply_text("Бот готов к использованию", reply_markup=markup)
             return ConversationHandler.END
+
+    async def help(self, update, context):
+        await update.message.reply_text(help_text)
 
     async def get_token(self, update, context): # получение oath токена для работы с диском
         id = update.message.chat.id
@@ -97,6 +102,10 @@ class Bot_handler:
 
         if path == "disk:/":
             path = "disk:"
+
+        if text == "/stop":
+            await update.message.reply_text("Отмена команды", reply_markup=markup)
+            return ConversationHandler.END
 
         if text == "/ready":
             if typ == "dir":
