@@ -47,26 +47,27 @@ async def send_main_files(update, context, typ):
         if i["type"] == "dir":
             context.user_data["dirs"].append(i["name"])
             if typ == "dir":
-                await update.message.reply_text(i["name"], reply_markup=ready_markup)
+                await update.message.reply_text(f'{i["name"]} - папка', reply_markup=ready_markup)
             else:
-                await update.message.reply_text(i["name"])
+                await update.message.reply_text(f'{i["name"]} - папка')
         elif typ != "dir" and typ != "copy1":
             await update.message.reply_text(i["name"])
     return 1
 
 
 class Bot_handler:
-    async def start(self, update, context):
+    async def start(self, update, context):  # начало работы с ботом
         id = update.message.chat.id
         user = get_user(id)
         if not user:
             await update.message.reply_text(f'''Приветствуй,\nЯ пока не имею  доступ к вашему Яндекс диску.
                                                \nПерейдите по ссылке, скопируйте токен и отправте мне, что я смог взаимоде́йствовать с вашим диском\n{get_code_url}''')
             return 1
-        else:
+        else:  # если пользователь уже есть в бд
             await update.message.reply_text("Бот готов к использованию", reply_markup=markup)
+            return ConversationHandler.END
 
-    async def get_token(self, update, context):
+    async def get_token(self, update, context): # получение oath токена для работы с диском
         id = update.message.chat.id
         token = update.message.text
         user = get_user(id)
@@ -79,15 +80,16 @@ class Bot_handler:
 
         await update.message.reply_text("Ваш token был обновлен. Вы можете в любое время именить его",
                                         reply_markup=markup)
+        return ConversationHandler.END
 
-    async def stop(self, update, context):
+    async def stop(self, update, context):  # отсановка выполнении команды
         await update.message.reply_text("stop")
 
     async def update_token(self, update, context):
         await update.message.reply_text(f"Отправьте новый токен {get_code_url}")
         return 1
 
-    async def get_path(self, update, context):
+    async def get_path(self, update, context):  # метод для получения пути до папки или файла
         user = get_user(update.message.chat.id)
         typ = context.user_data["typ"]
         path = context.user_data["path"] if typ != "copy1" else context.user_data["path2"]
@@ -127,9 +129,11 @@ class Bot_handler:
                         context.user_data["dirs"].append(i["name"])
                         await update.message.reply_text(i["name"])
                 else:
-                    await update.message.reply_text(i["name"])
                     if i["type"] == "dir":
                         context.user_data["dirs"].append(i["name"])
+                        await update.message.reply_text(f'{i["name"]} - папка')
+                    else:
+                        await update.message.reply_text(i["name"])
             return 1
         else:
             path = path + "/" + text
@@ -148,7 +152,7 @@ class Bot_handler:
                 return 1
             return 2
 
-    async def move(self, update, context):
+    async def move(self, update, context):  # перемщение файла или папки в другое место
         context.user_data["typ"] = "copy0"
         await update.message.reply_text(
             "Укажите путь до файла или папки, который будет перемещён. Если выбрали папку, отпратье /ready",
@@ -163,14 +167,14 @@ class Bot_handler:
         path2 = context.user_data["path2"]
         if path2 == "disk:/":
             path2 = "disk:"
+        if "." not in text and "." in path1:
+            text += "." + path1.split(".")[-1]
         path2 = path2 + "/" + text
         resp = disk_handlers.move(user.token, path1, path2)
         if resp.get("status", 0) == "success":
             await update.message.reply_text("Файл успешно перемещен", reply_markup=markup)
         else:
-            print(path1, path2)
-            print(resp)
-            await update.message.reply_text("Что-то пошло не так", reply_markup=markup)
+            await update.message.reply_text(resp.get("message", "Что-то пошло не так"), reply_markup=markup)
         return ConversationHandler.END
 
     async def copied(self, update, context):
@@ -180,14 +184,14 @@ class Bot_handler:
         path2 = context.user_data["path2"]
         if path2 == "disk:/":
             path2 = "disk:"
+        if "." not in text and "." in path1:
+            text += "." + path1.split(".")[-1]
         path2 = path2 + "/" + text
         resp = disk_handlers.copy(user.token, path1, path2)
         if resp.get("status", 0) == "success":
             await update.message.reply_text("Файл успешно скопирован", reply_markup=markup)
         else:
-            print(path1, path2)
-            print(resp)
-            await update.message.reply_text("Что-то пошло не так", reply_markup=markup)
+            await update.message.reply_text(resp.get("message", "Что-то пошло не так"), reply_markup=markup)
         return  ConversationHandler.END
 
     async def copy(self, update, context):
@@ -203,7 +207,7 @@ class Bot_handler:
         if resp.get("status", 0) == "success":
             await update.message.reply_text("Успешно удалено", reply_markup=markup)
         else:
-            await update.message.reply_text("Что-то пошло не так", reply_markup=markup)
+            await update.message.reply_text(resp.get("message", "Что-то пошло не так"), reply_markup=markup)
 
     async def delete_file(self, update, context):
         context.user_data["typ"] = "delete"
@@ -218,7 +222,7 @@ class Bot_handler:
             await update.message.reply_document(document=open(f'downloaded/{resp["filename"]}', 'rb'))
             os.remove(f"downloaded/{resp['filename']}")
         else:
-            await update.message.reply_text(resp["status"])
+            await update.message.reply_text(resp.get("message", "Что-то пошло не так"), reply_markup=markup)
 
     async def get_all_files(self, update, context):
         user = get_user(update.message.chat.id)
@@ -232,7 +236,7 @@ class Bot_handler:
     async def upload_file(self, update, context):
         user = get_user(update.message.chat.id)
 
-        await update.message.reply_text("Выберите папку")
+        await update.message.reply_text("Выберите папку. Если выбрали, то оправьте /ready")
         context.user_data["typ"] = "dir"
         await send_main_files(update, context, "dir")
         return 1
@@ -253,7 +257,7 @@ class Bot_handler:
         if resp.get("href", 0) != 0:
             await update.message.reply_text("Папка была создана", reply_markup=markup)
         else:
-            await update.message.reply_text("Что-то пошло не так", reply_markup=markup)
+            await update.message.reply_text(resp.get("message", "Что-то пошло не так"), reply_markup=markup)
         return ConversationHandler.END
 
     async def create_folder(self, update, context):
@@ -271,22 +275,28 @@ class Bot_handler:
         message = update.message
         if context.user_data.get("name", 0) == 0:
             name = message.text
+            if not name:
+                await update.message.reply_text("Неправильный формат имени")
+                return 2
             context.user_data["name"] = name
             await update.message.reply_text("Отправьте файл")
             return 2
 
         attachment = message.effective_attachment
-        if type(attachment) == tuple:
-            new_file = await attachment[-1].get_file()
-        else:
-            new_file = await attachment.get_file()
+        try:
+            if type(attachment) == tuple:
+                new_file = await attachment[-1].get_file()
+            else:
+                new_file = await attachment.get_file()
+        except Exception:
+            await update.message.reply_text("Вы отправили не файл")
         name = context.user_data["name"]
         await new_file.download_to_drive(f'downloaded/{name}')
         resp = disk_handlers.upload_file(user.token, path, name)
         if resp.get("status", 0) == "success":
             await update.message.reply_text("Файл был удачно загружен", reply_markup=markup)
         else:
-            await update.message.reply_text(resp["message"], reply_markup=markup)
+            await update.message.reply_text(resp.get("message", "Что-то пошло не так"), reply_markup=markup)
         return ConversationHandler.END
 
     async def download_file(self, update, context):

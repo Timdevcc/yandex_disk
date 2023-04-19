@@ -17,7 +17,7 @@ def get_disk_info(oauth: str) -> dict:
     return response.json()
 
 
-def get_file_or_dir_metainfo(oauth: str, path: str, fields='', limit=20, offset=0, sort='') -> dict:
+def get_file_or_dir_metainfo(oauth: str, path: str, fields='', limit=100, offset=0, sort='') -> dict:
     """Возвращает словарь с метаинформацией о файле или папке
 
     https://yandex.ru/dev/disk/api/reference/meta.html
@@ -59,7 +59,7 @@ def get_file_or_dir_metainfo(oauth: str, path: str, fields='', limit=20, offset=
     return response.json()
 
 
-def get_all_files(oauth: str, limit=20, media_type='', offset='', fields='') -> dict:
+def get_all_files(oauth: str, limit=100, media_type='', offset='', fields='') -> dict:
     """Возвращает словарь с одним ключом items, по этому ключу находится
     список всех файлов диска
 

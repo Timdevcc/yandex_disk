@@ -89,9 +89,11 @@ def main():
         },
         fallbacks=[CommandHandler('stop', bot.stop)]
     )
+
+    #  обработчики команд бота
     application.add_handler(CommandHandler("get_all_files", bot.get_all_files))
     application.add_handler(CommandHandler("get_disk_info", bot.get_disk_info))
-    application.add_handler(CommandHandler('clear_trash_bin', bot.clear_trash_bin))
+    application.add_handler(CommandHandler('clear_trash', bot.clear_trash_bin))
     application.add_handler(move_handler)
     application.add_handler(copy_handler)
     application.add_handler(folder_handler)
