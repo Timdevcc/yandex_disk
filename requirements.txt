@@ -1,0 +1,4 @@
+SQLAlchemy==2.0.4
+Werkzeug==2.2.3
+requests==2.27.1
+python-telegram-bot==20.1
